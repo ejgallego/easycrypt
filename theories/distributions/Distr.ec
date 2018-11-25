@@ -1037,7 +1037,15 @@ proof. by rewrite dprod_def -massE muK // isdistr_mprod isdistr_mu1. qed.
 lemma dprodE Pa Pb (da : 'a distr) (db : 'b distr):
     mu (da `*` db) (fun (ab : 'a * 'b) => Pa ab.`1 /\ Pb ab.`2)
   = mu da Pa * mu db Pb.
-proof. admitted.
+proof.
+rewrite muE sum_pair /=; first by apply/summable_cond/summable_mass.
+pose Fa := fun a => if Pa a then mass da a else 0%r.
+pose Fb := fun b => if Pb b then mass db b else 0%r.
+pose F  := fun a => Fa a * sum Fb; rewrite (@eq_sum _ F) /= => [a|].
++ rewrite -sumZ; apply: eq_sum => /= b @/Fa @/Fb => {Fa Fb F}.
+  by case: (Pa a); case: (Pb b) => //= _ _; rewrite !massE dprod1E.
+by rewrite /F sumZr !muE.
+qed.
 
 lemma supp_dprod (da : 'a distr) (db : 'b distr) ab:
   ab \in da `*` db <=> ab.`1 \in da /\ ab.`2 \in db.
