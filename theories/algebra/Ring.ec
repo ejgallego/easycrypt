@@ -166,12 +166,46 @@ abstract theory ZModule.
   by rewrite !AddMonoid.iteropE iterS.
   qed.
 
+  lemma mulrNS (x : t) (n : int): 0 <= n =>
+    intmul x (-1) + intmul x n = intmul x (n - 1).
+  proof.
+  elim: n=> [|n ge0_n ih].
+  + by rewrite mulr0z addr0.
+  by rewrite mulrNz mulr1z mulrS // addrCA addrA subrr add0r.
+  qed.
+
+  lemma mulrSz x n: intmul x (n + 1) = x + intmul x n.
+  proof.
+  case: (n < 0)=> [lt0_n|/lezNgt]; last by exact/mulrS.
+  rewrite (@mulrNz _ (-n)) -{2}(opprK x) -opprD.
+  rewrite -{2}mulr1z -mulrNz mulrNS.
+  + by rewrite oppz_ge0; exact/ltzW.
+  rewrite -mulrNz /#.
+  qed.
+
   lemma mulNrz x n : intmul (- x) n = - (intmul x n).
   proof.
   elim/intwlog: n => [n h| | n ge0_n ih].
   + by rewrite -(@oppzK n) !(@mulrNz _ (- n)) h.
   + by rewrite !mulr0z oppr0.
   + by rewrite !mulrS // ih opprD.
+  qed.
+
+  lemma mulrnz_add x n m:
+    0 <= n => intmul x n + intmul x m = intmul x (n + m).
+  proof.
+  elim: n=> [|n ge0_n ih].
+  + by rewrite mulr0z add0r.
+  by rewrite mulrSz -addrA ih -mulrSz addzAC.
+  qed.
+
+  lemma mulrzz_add x n m: intmul x n + intmul x m = intmul x (n + m).
+  proof.
+  case: (0 <= n)=> [|/ltzNge lt0_n].
+  + exact/mulrnz_add.
+  rewrite (@mulrNz _ (-n)) (@mulrNz _ (-m)); have: (0 <= -n).
+  + by rewrite oppz_ge0; exact/ltzW.
+  by rewrite -opprD=> /mulrnz_add ->; rewrite (@mulrNz _ (-(-n - m))) opprK /#.
   qed.
 end ZModule.
 
