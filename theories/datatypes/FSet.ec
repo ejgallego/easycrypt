@@ -614,6 +614,15 @@ proof.
   by move: h=> /=; exists a.
 qed.
 
+lemma imageK (f : 'a -> 'b) (g : 'b -> 'a) s:
+  cancel f g =>
+  image g (image f s) = s.
+proof.
+  move=> fK; apply/fsetP=> x; rewrite imageP; split=> [[y] [] + <<- |x_in_s].
+  + by rewrite imageP=> - [z] [] + <<-; rewrite fK.
+  by exists (f x); rewrite fK /= imageP; exists x.
+qed.
+
 (* -------------------------------------------------------------------- *)
 lemma nosmt fcard_image_leq (f : 'a -> 'b) (A : 'a fset):
   card (image f A) <= card A.
@@ -623,6 +632,15 @@ proof.
     by rewrite fcardU fcard1 ler_naddr 1:oppr_le0 1:fcard_ge0.
   rewrite fcardU fsetI1 x_notin_A fcards0 fcard1 oppz0 addz0.
   by rewrite ler_add2r.
+qed.
+
+lemma fcard_image_eq (f : 'a -> 'b) (g : 'b -> 'a) s:
+  cancel f g =>
+  card (image f s) = card s.
+proof.
+  move=> /imageK image2_s; rewrite eqz_leq; split.
+  + exact/fcard_image_leq.
+  by rewrite -{1}image2_s; exact/fcard_image_leq.
 qed.
 
 (* -------------------------------------------------------------------- *)
