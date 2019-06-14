@@ -46,7 +46,7 @@ rewrite coset1E mem_oflist mapP; split=> [[h] [] /= + ->>|xg_in_H].
 by exists (x - g)=> /=; rewrite -memE xg_in_H /= addrCA subrr addr0.
 qed.
 
-lemma cosets_bij a b H:
+lemma coset1_bij a b H:
   exists f,
     bijective f /\
     coset1 b H = image f (coset1 a H).
@@ -62,6 +62,43 @@ apply/fsetP=> h; rewrite imageP coset1P; split=> [hb_in_H|].
   by rewrite addrC -!addrA (@addrC (-a) a) subrr addr0.
 move=> [ah] [] /= + <<-; rewrite coset1P (@addrC b) -addrA (@addrC _ (-b)).
 by rewrite -addrA (@addrA b (-b)) subrr add0r addrC.
+qed.
+
+lemma card_coset1_eq a b H:
+  card (coset1 a H) = card (coset1 b H).
+proof.
+by move: (coset1_bij a b H)=> [f] [] [g] [] + _ -> - /fcard_image_eq ->.
+qed.
+
+lemma coset10 H: coset1 zeror H = H.
+proof. by apply/fsetP=> x; rewrite coset1P subr0. qed.
+
+lemma card_coset1 a H:
+  card (coset1 a H) = card H.
+proof. by rewrite -{2}coset10; exact/card_coset1_eq. qed.
+
+lemma coset1_cover H:
+  H <> fset0 =>
+  forall x, exists a, x \in coset1 a H.
+proof.
+move=> /mem_pick pick_in_H x; exists (x - pick H).
+by rewrite coset1P opprD addrA subrr add0r opprK.
+qed.
+
+lemma coset1_disjoint x a b H:
+  is_subgroup H =>
+  x \in coset1 a H =>
+  x \in coset1 b H =>
+  coset1 a H = coset1 b H.
+proof.
+move=> ^sg_H [] z_in_H H_subr_closed; rewrite !coset1P=> ha hb.
+move: (H_subr_closed _ _ ha hb); rewrite addrAC opprD opprK addrA subrr add0r.
+move=> hab; apply/fsetP=> z; rewrite !coset1P; split=> [hza|hzb].
++ move: (H_subr_closed _ _ hza hab).
+  by rewrite addrAC opprD opprK -!addrA subrr addr0.
+move: (subgroup_opp _ _ sg_H hzb)=> hbz; move: (H_subr_closed _ _ hbz hab).
+rewrite opprD opprK opprD opprK addrA -(@addrA (-z)) subrr addr0.
+by move=>/(subgroup_opp _ _ sg_H); rewrite opprD opprK.
 qed.
 
 (**************************************************************************)
