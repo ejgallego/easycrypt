@@ -166,6 +166,15 @@ abstract theory ZModule.
   by rewrite !AddMonoid.iteropE iterS.
   qed.
 
+  lemma mul0rz (n : int): intmul zeror n = zeror.
+  proof.
+  case: (0 <= n).
+  + by elim: n=> [|n /mulrS -> ih]; [exact/mulr0z|rewrite add0r].
+  move=> lt0_n; rewrite (@mulrNz _ (-n)) oppr_eq0.
+  move: lt0_n; rewrite -oppz_le0 -ltzNge=> /ltzW.
+  by elim: (-n)=> {n} [|n /mulrS -> ih]; [exact/mulr0z|rewrite add0r].
+  qed.
+
   lemma mulrNS (x : t) (n : int): 0 <= n =>
     intmul x (-1) + intmul x n = intmul x (n - 1).
   proof.
