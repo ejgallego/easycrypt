@@ -1,104 +1,104 @@
-require import Ring List FSet Int IntDiv.
+require import Ring Number StdRing StdOrder List FSet Int IntExtra IntDiv.
 require (*--*) FinType.
+(*---*) import IntID IntOrder.
 
 pragma -oldip. pragma +implicits.
 
 (**************************************************************************)
 clone include Ring.ZModule.
 
-op g     : {  t  | forall x, exists n, x = intmul g n } as gS.
-op order : { int |    0 < order
-                   /\ intmul g order = zeror
-                   /\ (forall n, 0 < n < order => intmul g n <> zeror) }
-           as orderS.
+op g     : t.
+op order : int.
 
-lemma gt0_order: 0 < order by move: orderS=> [].
+abbrev gpow n = intmul g n.
 
-lemma gorder_eq0r: intmul g order = zeror by move: orderS=> [].
+op enum = map gpow (range 0 order) axiomatized by enumE.
 
-lemma order_argmin n: 0 < n < order => intmul g n <> zeror.
-proof. by move: orderS n=> []. qed.
-
-(**************************************************************************)
-(* TODO: Not sure if the mulgX lemmas are useful.
-   The ones we want say "g^n = 0 <=> order %| n" *)
-lemma mulgn_cyclic m k:
-  0 <= k =>
-  intmul g m = zeror =>
-  intmul g (k * m) = zeror.
-proof.
-move=> + gm_eq_0; elim: k=> [|k ge0_k ih]; first by rewrite mulr0z.
-by rewrite mulzDl /= -mulrzz_add ih gm_eq_0 addr0.
-qed.
-
-lemma mulgz_cyclic m k:
-  intmul g m = zeror =>
-  intmul g (k * m) = zeror.
-proof.
-case: (0 <= k)=> [/(mulgn_cyclic m) //=|].
-rewrite -oppz_le0 -ltzNge=> /ltzW + gm_0 - /(mulgn_cyclic m _) /(_ gm_0).
-by rewrite IntID.mulNr mulrNz oppr_eq0.
-qed.
-
-lemma mulgz_modz m n:
-  intmul g m = zeror =>
-  intmul g n = intmul g (n %% m).
-proof.
-by rewrite {1}(@divz_eq n m) -mulrzz_add=> /mulgz_cyclic ->; exact/add0r.
-qed.
-
-lemma gz_mod n: intmul g n = intmul g (n %% order).
-proof. exact/mulgz_modz/gorder_eq0r. qed.
-
-(**************************************************************************)
-(** Note: This is also the witness bijection between `t` and `Z_{order}` **)
-op enum = map (intmul g) (range 0 order) axiomatized by enumE.
-
-lemma enum_universal x: x \in enum.
-proof.
-move: (gS x)=> [n]; rewrite gz_mod enumE mapP=> ->; exists (n %% order)=> //=.
-by rewrite mem_range modz_ge0 1:[smt(gt0_order)] //= ltz_pmod gt0_order.
-qed.
-
-lemma exp_pinj_le m n:
-  0 <= m <= n < order =>
-  intmul g m = intmul g n =>
-  m = n.
-proof.
-move=> hmn; rewrite eq_sym -subr_eq0 -mulrNz mulrzz_add.
-case: (m = n)=> //= m_neq_n.
-have // := order_argmin (n - m) _.
-smt().
-qed.
-
-lemma exp_pinj m n:
-  0 <= m < order =>
-  0 <= n < order =>
-  intmul g m = intmul g n =>
-  m = n.
-proof.
-case: (m <= n)=> [le_m_n|le_n_m] hm hn.
-+ by apply/exp_pinj_le=> /#.
-by rewrite eq_sym (@eq_sym m); apply/exp_pinj_le=> /#.
-qed.
-
-lemma uniq_enum: uniq enum.
-proof.
-rewrite enumE; apply/map_inj_in_uniq.
-+ by move=> x y; rewrite !mem_range; exact/exp_pinj.
-exact/range_uniq.
-qed.
-
-lemma enumS x: count (pred1 x) enum = 1.
-proof. by rewrite count_uniq_mem 1:uniq_enum enum_universal. qed.
+axiom genum_spec : forall x, count (pred1 x) enum = 1.
 
 clone include FinType with
-  type t  <- t,
-  op enum <- enum
-proof enum_spec by exact/enumS.
+  type t    <- t,
+  op   enum <- enum
+proof enum_spec by exact/genum_spec.
 
-lemma card_is_order: card = order.
-proof. by rewrite /card enumE size_map size_range [smt(gt0_order)]. qed.
+lemma gen_spec x : exists i, 0 <= i < order /\ x = gpow i.
+proof.
+by move: (enumP x); rewrite enumE => /mapP[i] [] /mem_range ??; exists i.
+qed.
+
+lemma gt0_order: 0 < order.
+proof. by case: (gen_spec witness) => i [] + _ /#. qed.
+
+hint exact : gt0_order.
+
+lemma gpow0 : gpow 0 = zeror.
+proof. by rewrite mulr0z. qed.
+
+lemma gpow1 : gpow 1 = g.
+proof. by rewrite mulr1z. qed.
+
+lemma gpowS m : gpow (m + 1) = g + gpow m.
+proof. by rewrite mulrSz. qed.
+
+lemma gpowD (m n : int) : gpow (m + n) = gpow m + gpow n.
+proof. by rewrite -mulrzz_add. qed.
+
+lemma gpowN (m : int) : gpow (-m) = - gpow m.
+proof. by rewrite -mulrNz. qed.
+
+lemma gpowB (m n : int) : gpow (m - n) = gpow m - gpow n.
+proof. by rewrite gpowD gpowN. qed.
+
+lemma glog_inj m n :
+     0 <= m < order
+  => 0 <= n < order
+  => gpow m = gpow n
+  => m = n.
+proof.
+wlog: m n / (n <= m) => [wlog|le_nm] rgm rgn.
+  by case: (leVge n m) => /wlog + ? - ->//; apply/eq_sym.
+rewrite -subr_eq0 -gpowB => heq.
+have := enum_spec (gpow (m - n)); rewrite enumE.
+rewrite heq range_ltn //= gpow0 b2i1 addrC -subr_eq0 addrK.
+rewrite -count_eq0 has_pred1 &(contraR) => neq_mn.
+by rewrite -heq &(@map_f gpow) mem_range /#.
+qed.
+
+lemma gpow_order : gpow order = zeror.
+proof.
+case: (gen_spec (gpow order)) => k [] [+ lt_ko].
+case/ler_eqVlt => [<-|gt0_k]; first by rewrite gpow0.
+rewrite -subr_eq0 -gpowB -{1}gpow0 => h.
+by have := glog_inj _ _ _ _ h => // /#.
+qed.
+
+lemma gpow_ediv d m : gpow (d * order + m) = gpow m.
+proof.
+rewrite gpowD -subr_eq0 addrK; elim/intwlog: d.
++ by move=> d; rewrite mulNr gpowN oppr_eq0.
++ by rewrite gpow0.
+move=> d ihd; rewrite mulrDl /= gpowD => ->.
+by rewrite add0r gpow_order.
+qed.
+
+lemma gpow_mul_order d : gpow (d * order) = zeror.
+proof. by rewrite (@gpow_ediv d 0) gpow0. qed.
+
+lemma gpow_mod_order n: gpow (n %% order) = gpow n.
+proof. by rewrite {2}(@divz_eq n order) gpowD gpow_mul_order add0r. qed.
+
+lemma glog_inj_mod m n :
+  gpow m = gpow n => m %% order = n %% order.
+proof.
+rewrite -(@gpow_mod_order m) -(@gpow_mod_order n) &(glog_inj);
+  by rewrite ltz_pmod //= modz_ge0 gtr_eqF.
+qed.
+
+lemma gpow_eq0P n : order %| n <=> gpow n = zeror.
+proof. split.
++ by case/dvdzP=> q ->; rewrite gpow_mul_order.
++ by rewrite -gpow0 /(%|) -{2}(@mod0z order); apply: glog_inj_mod.
+qed.
 
 (**************************************************************************)
 (* The rest of this file is currently experimentation
