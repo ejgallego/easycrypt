@@ -86,6 +86,14 @@ lemma eqL_summable (s1 s2 : 'a -> real):
 proof. by move=> sm1 /eq_summable <-. qed.
 
 (* -------------------------------------------------------------------- *)
+lemma summable_norm (s : 'a -> real):
+  summable s => summable (fun x => `|s x|).
+proof.
+case=> M leM; exists M => J /leM le; apply: (ler_trans _ _ le).
+by apply/lerr_eq/eq_bigr => x _ /=; rewrite normr_id.
+qed.
+
+(* -------------------------------------------------------------------- *)
 lemma nosmt summableN (s : 'a -> real):
   summable s => summable (fun x => -(s x)).
 proof.
@@ -215,8 +223,16 @@ by exists M => x [J [uqJ ->]]; apply/hM.
 qed.
 
 (* -------------------------------------------------------------------- *)
-op psum (s : 'a -> real) =
-  lub (fun M => exists J, uniq J /\ M = big predT (fun x => `|s x|) J).
+op psum_pred (s : 'a -> real) =
+  fun M => exists J, uniq J /\ M = big predT (fun x => `|s x|) J.
+
+lemma nz_psum_pred (s : 'a -> real) : nonempty (psum_pred s).
+proof. by exists 0%r; exists []. qed.
+
+hint exact : nz_psum_pred.
+
+(* -------------------------------------------------------------------- *)
+op psum (s : 'a -> real) = lub (psum_pred s).
 
 op sum (s : 'a -> real) =
   if summable s then psum (pos s) - psum (neg s) else 0%r.
@@ -399,20 +415,31 @@ lemma sum0 ['a]: sum<:'a> (fun _ => 0%r) = 0%r.
 proof. by rewrite (@sumE_fin _ []). qed.
 
 (* -------------------------------------------------------------------- *)
-lemma nosmt ler_psum (s1 s2 : 'a -> real) :
-     (forall x, `|s1 x| <= `|s2 x|)
-  => summable s2 => psum s1 <= psum s2.
+lemma nosmt ler_psum_reindex ['a 'b] h s1 s2 :
+     injective h
+  => (forall x, `|s1 x| <= `|s2 (h x)|)%Real
+  => summable s2 => psum<:'a> s1 <= psum<:'b> s2.
 proof.
-move=> le_s12 ^sbl_s2 [M2 bs2]; have ^sbl_s1 [M1 bs1]: summable s1.
-  exists M2=> J /bs2; (pose F := big _ _ _) => leFM.
-  rewrite (ler_trans F) // /F; apply/ler_sum=> a _ /=; apply/le_s12.
+move=> inj_h le_s12 ^sbl_s2 [M2 bs2]; have ^sbl_s1 [M1 bs1]: summable s1.
++ exists M2 => J uqJ; pose K := map h J; have: uniq K.
+  * by apply: map_inj_in_uniq; first by move=> x y _ _ /inj_h.
+  move/bs2; (pose F := big _ _ _) => leFM.
+  rewrite (ler_trans F) // /F big_map; apply/ler_sum.
+  by move=> a _ /=; apply/le_s12.
 apply/ler_lub; first last; first split.
 + by exists 0%r []=> /=; apply/eq_sym/(@big_nil _ _).
 + by exists M2=> x [J] [+ ->] - /bs2.
 + by exists 0%r []=> /=; apply/eq_sym/(@big_nil _ _).
-move=> x [J] [uqJ ->] /=; exists (big predT (fun x => `|s2 x|) J).
-by split; [exists J | apply/ler_sum].
+move=> x [J] [uqJ ->] /=; exists (big predT (fun x => `|s2 x|) (map h J)).
+split; [exists (map h J) => /= | by rewrite big_map &(ler_sum)].
+by apply: map_inj_in_uniq; first by move=> 4? /inj_h.
 qed.
+
+(* -------------------------------------------------------------------- *)
+lemma nosmt ler_psum (s1 s2 : 'a -> real) :
+     (forall x, `|s1 x| <= `|s2 x|)
+  => summable s2 => psum s1 <= psum s2.
+proof. by apply: ler_psum_reindex. qed.
 
 (* -------------------------------------------------------------------- *)
 lemma nosmt ler_sum (s1 s2 : 'a -> real) :
@@ -489,6 +516,24 @@ by apply/(@lim_eq 0)=> n ge0_n /=; rewrite big_split.
 qed.
 
 (* -------------------------------------------------------------------- *)
+lemma nosmt sum_split ['a] (s : 'a -> real) p : summable s => sum s =
+    sum (fun x => if  p x then s x else 0%r)
+  + sum (fun x => if !p x then s x else 0%r).
+proof.
+move=> sms; rewrite -sumD 1?summable_cond // &(eq_sum) /=.
+by move=> x; case: (p x).
+qed.
+
+(* -------------------------------------------------------------------- *)
+lemma nosmt sumD1 ['a] (s : 'a -> real) x0 : summable s => sum s =
+  s x0 + sum (fun x => if x <> x0 then s x else 0%r).
+proof.
+move=> sms; rewrite (@sum_split s (pred1 x0)) //=; congr=> //.
+rewrite (@sumE_fin _ [x0]) //= 1?big_seq1 //.
+by move=> @/pred1 x; case: (x = x0).
+qed.
+
+(* -------------------------------------------------------------------- *)
 lemma nosmt sum_big ['a 'b] (F : 'a -> 'b -> real) (s : 'b list) :
      (forall y, y \in s => summable (fun x => F x y))
   =>   sum (fun x => big predT (F x) s)
@@ -516,22 +561,201 @@ by rewrite -limZ; apply/(@lim_eq 0) => n /= _; rewrite mulr_sumr.
 qed.
 
 (* -------------------------------------------------------------------- *)
-lemma nosmt sum_split ['a] (s : 'a -> real) p : summable s => sum s =
-    sum (fun x => if  p x then s x else 0%r)
-  + sum (fun x => if !p x then s x else 0%r).
+lemma nosmt sumZr (s : 'a -> real) c : sum (fun x => s x * c) = sum s * c.
+proof. by rewrite mulrC -sumZ; apply/eq_sum=> x /=; apply/mulrC. qed.
+
+(* -------------------------------------------------------------------- *)
+lemma nosmt perm_eq_pair ['a 'b] (s : ('a * 'b) list) : uniq s => perm_eq s
+  (flatten
+     (map (fun a => filter (fun xy : _ * _ => xy.`1 = a) s)
+          (undup (map fst s)))).
 proof.
-move=> sms; rewrite -sumD 1?summable_cond // &(eq_sum) /=.
-by move=> x; case: (p x).
+move=> uq_s; apply: uniq_perm_eq => //=.
++ apply: uniq_flatten_map => /=.
+  * by move=> x; rewrite filter_uniq.
+  * move=> x y; rewrite !mem_undup => /mapP[] [/=] a1 b1 [_ ->].
+    case/mapP=> -[/=] a2 b2 [_ ->] /hasP[] [a b] /=.
+    by rewrite !mem_filter /= => -[] [-> _] [-> _].
+  * by apply: undup_uniq.
+case=> a b; split => [ab_in_s|].
++ apply/flatten_mapP; exists a; rewrite mem_undup /= ?mem_filter //=.
+  by rewrite ab_in_s /= &(mapP); exists (a, b).
+case/flatten_mapP=> a'; rewrite mem_undup => -[] /mapP[].
+by case=> a2 b2 /= [_ ->>] {a'}; rewrite mem_filter /= => -[].
 qed.
 
 (* -------------------------------------------------------------------- *)
-lemma nosmt sumD1 ['a] (s : 'a -> real) x0 : summable s => sum s =
-  s x0 + sum (fun x => if x <> x0 then s x else 0%r).
+lemma nosmt big_pair ['a 'b] F (s : ('a * 'b) list) : uniq s =>
+  big predT F s =
+    big predT (fun a =>
+        big predT F (filter (fun xy : _ * _ => xy.`1 = a) s))
+      (undup (map fst s)).
 proof.
-move=> sms; rewrite (@sum_split s (pred1 x0)) //=; congr=> //.
-rewrite (@sumE_fin _ [x0]) //= 1?big_seq1 //.
-by move=> @/pred1 x; case: (x = x0).
+move=> /perm_eq_pair /eq_big_perm /(_ predT F) ->.
+by rewrite big_flatten big_map.
 qed.
+
+(* -------------------------------------------------------------------- *)
+lemma nosmt uniq_enumerate ['a] s P n :
+  enumerate<:'a> s P => uniq (pmap s (range 0 n)).
+proof.
+rewrite /enumerate => -[uq _]; apply/pmap_inj_in_uniq/range_uniq.
+by move=> x y v _ _; apply/uq/range_uniq.
+qed.
+
+(* -------------------------------------------------------------------- *)
+lemma nosmt perm_eq_refl_eq ['a] (s1 s2 : 'a list) :
+  s1 = s2 => perm_eq s1 s2.
+proof. by move=> ->; apply: perm_eq_refl. qed.
+
+(* -------------------------------------------------------------------- *)
+lemma nosmt lub_le_ub E z : has_lub E => ub E z => lub E <= z.
+proof. admitted.
+
+(* -------------------------------------------------------------------- *)
+lemma nosmt ler_psum_lub ['a] (s : 'a -> real) z :
+     (forall J, uniq J => big predT (fun x => `|s x|) J <= z)
+  => psum s <= z.
+proof.
+move=> le; have sm: summable s by exists z.
+apply: lub_le_ub; first by apply: summable_has_lub.
+by move=> x [J [uqJ ->]]; apply: le.
+qed.
+
+(* -------------------------------------------------------------------- *)
+lemma ge0_psum ['a] (s : 'a -> real) : 0%r <= psum s.
+proof. admitted.
+
+(* -------------------------------------------------------------------- *)
+lemma nosmt psum_bigop ['a 'b] P (s : 'a -> 'b -> real) r :
+     (forall x y, 0%r <= s x y)
+  => (forall x, summable (s x))
+  => big P (fun x => psum (s x)) r =
+       psum (fun y => big P (fun x => s x y) r).
+proof. admitted.
+
+
+(*
+    (forall i x, 0 <= F i x) -> (forall i, summable (F i)) ->
+  \sum_(i <- r | P i) psum (F i) =
+    psum (fun x => \sum_(i <- r | P i) F i x).
+Proof.
+move=> ge0_F sm_F; elim: r => [|i r ih].
+  by rewrite big_nil; apply/esym/psum_eq0 => x; rewrite big_nil.
+rewrite big_cons ih; case: ifP => Pi; last first.
+  by apply/eq_psum=> x /=; rewrite big_cons Pi.
+rewrite -psumD //; first by move=> x; apply/sumr_ge0.
+  by apply/summable_sum.
+by apply/eq_psum=> x /=; rewrite big_cons Pi.
+Qed.
+*)
+
+(* -------------------------------------------------------------------- *)
+lemma nosmt eq_psum ['a] (s1 s2 : 'a -> real) :
+  (forall x, `|s1 x| = `|s2 x|) => psum s1 = psum s2.
+proof.
+move=> eq; apply: eq_lub => x; split; case=> J [uqJ ->];
+  by exists J; split=> //; apply: eq_bigr => /= i _; rewrite eq.
+qed.
+
+(* -------------------------------------------------------------------- *)
+lemma gerfin_psum ['a] (s : 'a -> real) J :
+  uniq J => summable s => big predT (fun x => `|s x|) J <= psum s.
+proof. admitted.
+
+(*
+\sum_(j : J) `|S (val j)| <= psum S.
+Proof.
+move=> smS; rewrite /psum (asboolT smS); apply/sup_upper_bound.
+  by apply/summable_sup. by apply/imsetbP; exists J.
+Qed.
+*)
+
+(* -------------------------------------------------------------------- *)
+lemma psum_finE ['a] J (s : 'a -> real) : uniq J => (support s <= mem J) => 
+  psum s = big predT (fun x => `|s x|) (to_seq (support s)).
+proof. admitted.
+
+(* -------------------------------------------------------------------- *)
+lemma nosmt psum_partition ['a 'b] (f : 'b -> 'a) s : summable s =>
+  psum s = psum (fun y => psum (fun x => if f x = y then s x else 0%r)).
+proof.
+move=> sms; rewrite eqr_le; split=> [|_]; last first.
++ pose F := fun x y => if f x = y then `|s x| else 0%r.
+  pose G := fun y => psum (fun x => F x y).
+  apply: ler_psum_lub => J uqJ; rewrite (@eq_bigr _ _ G).
+  * move=> y _ /=; rewrite ger0_norm ?ge0_psum //; apply: eq_psum => /=.
+    by move=>x @/F; case: (f x = y) => //; rewrite normr_id.
+  rewrite psum_bigop /= => [y x| |] @/F.
+  * by case: (f x = y) => //; rewrite normr_ge0.
+  * by move=> x; apply/summable_cond/summable_norm.
+  apply: ler_psum => //= x; rewrite ger0_norm.
+  * by apply: sumr_ge0 => y _ /=; case: (f x = y); rewrite ?normr_ge0.
+  case: (f x \in J) => h; last first.
+  * by rewrite big_seq big1 ?normr_ge0 //= => y yJ; case: (f x = y).
+  rewrite (bigD1 h) //= big_seq_cond big1 //= => z [zJ].
+  by rewrite /predC1 eq_sym => ->.
++ apply: ler_psum_lub => J uqJ; pose K := undup (map f J).
+  pose F := fun x y => if f x = y then `|s x| else 0%r.
+  have /= h := gerfin_psum (fun y => psum (fun x => F x y)) K _ _.
+  * by apply: undup_uniq.
+  * pose G := fun y => psum (fun x => F x y).
+    exists (psum s) => L uqL; rewrite (@eq_bigr _ _ G) =>  /= [y _|].
+    - by rewrite ger0_norm // ge0_psum.
+    rewrite psum_bigop /=.
+    - by move=> y x @/F; case: (f x = y) => //; rewrite normr_ge0.
+    - by move=> y; apply/summable_cond/summable_norm.
+    pose H := fun y => if f y \in L then `|s y| else 0%r.
+    rewrite (@eq_psum _ H) /=.
+    - move=> y @/H; case: (f y \in L) => fyL; last first.
+      * by rewrite big_seq big1 // => x xL @/F; case: (f y = x).
+      rewrite (bigD1 fyL) /F //= big1 //= => x.
+      by rewrite /predC1 eq_sym => ->.
+    apply: ler_psum => // y @/H; case: (f y \in L) => _.
+    - by rewrite normr_id. - by rewrite normr0 normr_ge0.
+  apply: (ler_trans (psum (fun x => psum (fun y => F y x)))); last first.
+  * apply/lerr_eq/eq_psum => x /=; congr; apply/eq_psum => /= y @/F.
+    by case: (f y = x) => _ //; rewrite normr_id.
+  apply/(ler_trans _ _ h) => /=; pose G := fun y => psum (fun x => F x y).
+  rewrite (@eq_bigr _ _ G) /= => [x|].
+  * by rewrite ger0_norm // ge0_psum.
+  rewrite psum_bigop /=.
+  * by move=> y x @/F; case: (f x = y) => //; rewrite normr_ge0.
+  * by move=> y; apply/summable_cond/summable_norm.
+  apply: (@ler_trans (psum s)); last first.
+  * apply: ler_psum => /=.
+admit.
+
+  rewrite (@psum_finE J) //=.
+  * move=> y @/support @/F /=; apply: contraR => yJ.
+    rewrite big_seq big1 //= => x; rewrite mem_undup.
+    case/mapP=> y' [y'J ->>].
+
+
+(* -------------------------------------------------------------------- *)
+lemma nosmt psum_pair ['a 'b] (s : 'a * 'b -> real) :
+  summable s => psum s = psum (fun a => psum (fun b => s (a, b))).
+proof.
+move=> sm; rewrite eqr_le; split=> [|_].
++ apply: ler_lub_down => //; first last.
+  * admit.
+  move=> M [J] [uqJ ME]; pose K := undup (map fst J).
+  exists (big predT (fun a => `|psum (fun b => s (a, b))|) K); split.
+  * by exists K => /=; apply: undup_uniq.
+  rewrite ME big_pair // -/K; apply: Bigreal.ler_sum => a _ /=.
+  admit.  
++ apply: ler_lub_down => //; first last.
+  * admit.
+  move=> M [J] [uqJ ME]; pose K := map (fun a => (a, witness<:'b>)) J.
+  
+
+
+ admitted.
+
+(* -------------------------------------------------------------------- *)
+lemma nosmt sum_pair ['a 'b] (s : 'a * 'b -> real) :
+  summable s => sum s = sum (fun a => sum (fun b => s (a, b))).
+proof. admitted.
 
 (* -------------------------------------------------------------------- *)
 lemma nosmt sump_eq0P (s : 'a -> real) :
