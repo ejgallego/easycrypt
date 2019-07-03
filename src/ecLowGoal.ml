@@ -73,20 +73,18 @@ module LowApply = struct
 
     if env1        (*φ*)!= env2        then false else
     if ld1.h_tvar  (*φ*)!= ld2.h_tvar  then false else
-    if ld1.h_local (*φ*)== ld2.h_local then true  else (
+    if ld1.h_local (*φ*)== ld2.h_local then true  else
 
-    let env  = env1 in
-    let hyps = LDecl.init env ld1.h_tvar in
+    let env     = env1 in
+    let hyps    = LDecl.init env ld1.h_tvar in
+    let tophyps = Mid.of_list ld2.h_local in
 
-    let rec h_eqs h1 h2 =
-      match h1, h2 with
-      | [], _ -> true
-      | _, [] -> false
+    let h_eqs (x, v) =
+      match Mid.find_opt x tophyps  with
+      | None -> false | Some v' ->
 
-      | (x1, v1) :: subh1, (x2, v2) :: subh2 ->
-        if not (id_equal x1 x2) then h_eqs h1 subh2 else
-        if v1 (*φ*)== v2 then h_eqs subh1 subh2 else begin
-          match v1, v2 with
+        (v (*φ*)== v') ||
+          match v, v' with
           | LD_var (t1, f1), LD_var (t2, f2) ->
                 EqTest.for_type env t1 t2
              && oeq (is_alpha_eq hyps) f1 f2
@@ -105,9 +103,7 @@ module LowApply = struct
 
           | _, _ -> false
 
-        end && h_eqs subh1 subh2
-
-   in h_eqs ld1.h_local ld2.h_local)
+   in List.for_all h_eqs ld1.h_local
 
   (* ------------------------------------------------------------------ *)
   let rec check_pthead (pt : pt_head) (tc : ckenv) =
@@ -1920,6 +1916,18 @@ let t_progress ?options ?ti (tt : FApi.backward) (tc : tcenv1) =
 type cstate = {
   cs_sbeq : Sid.t;
 }
+(*
+let pp_tc tc =
+  let pr = proofenv_of_proof (proof_of_tcenv tc) in
+  let cl = List.map (FApi.get_pregoal_by_id^~ pr) (FApi.tc_opened tc) in
+  let cl = List.map (fun x -> (EcEnv.LDecl.tohyps x.g_hyps, x.g_concl)) cl in
+
+  match cl with [] -> () | hd :: tl ->
+
+  Format.eprintf "%a@."
+    (EcPrinting.pp_goal (EcPrinting.PPEnv.ofenv (FApi.tc_env tc)))
+    (hd, `All tl)
+*)
 
 let t_crush ?(delta = true) ?tsolve (tc : tcenv1) =
   let dtsolve =
@@ -1939,6 +1947,12 @@ let t_crush ?(delta = true) ?tsolve (tc : tcenv1) =
 
   let ts ~tg id tc =
     let newtc = FApi.t_try (t_progress_subst ~tg ~eqid:id) tc in
+(*
+    Format.eprintf "%s@." "1: --------------------------------------------------------------------";
+    pp_tc (t_id tc); pp_tc newtc;
+    Format.eprintf "%s@." "2: --------------------------------------------------------------------";
+*)
+
     let ingoal =
       let newhyps = FApi.tc1_hyps (FApi.as_tcenv1 newtc) in
       not (EcEnv.LDecl.has_id id newhyps) &&
