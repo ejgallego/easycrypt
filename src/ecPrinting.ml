@@ -2542,7 +2542,7 @@ let pp_goal (ppe : PPEnv.t) fmt (g, extra) =
       Format.fprintf fmt "@\n";
       List.iteri (fun i g ->
         Format.fprintf fmt "@\n@[<hov 2>@\n%a@]@?"
-          (PPGoal.pp_goal1 ~pphyps:false ~idx:(i+2) ppe) g)
+          (PPGoal.pp_goal1 ~pphyps:true ~idx:(i+2) ppe) g)
         gs
 
 (* -------------------------------------------------------------------- *)
