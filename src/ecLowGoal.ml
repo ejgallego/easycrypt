@@ -246,6 +246,50 @@ let t_id (tc : tcenv1) =
   FApi.tcenv_of_tcenv1 tc
 
 (* -------------------------------------------------------------------- *)
+let t_shuffle (ids : EcIdent.t list) (tc : tcenv1) =
+  let module E = struct exception InvalidShuffle end in
+
+  try
+    let hyps, concl = FApi.tc1_flat tc in
+    let { h_tvar; h_local = hyps } = EcEnv.LDecl.tohyps hyps in
+    let hyps = Mid.of_list hyps in
+
+    let for_form known f =
+      if not (Mid.submap (fun _ _ _ -> true) f.f_fv known) then
+        raise E.InvalidShuffle in
+
+    let new_ = LDecl.init (FApi.tc1_env tc) h_tvar in
+    let known, new_ =
+      let add1 (known, new_) x =
+        if Sid.mem x known then
+          raise E.InvalidShuffle;
+
+        let bd = Mid.find_opt x hyps in
+        let bd = oget ~exn:E.InvalidShuffle bd in
+
+        begin match bd with
+        | LD_var (ty, f) ->
+            if not (Mid.submap (fun _ _ _ -> true) ty.ty_fv known) then
+              raise E.InvalidShuffle;
+            oiter (for_form known) f
+
+        | LD_hyp f ->
+            for_form known f
+
+        | LD_mem _ | LD_abs_st _ | LD_modty _ ->
+            () end;
+
+        (Sid. add x known, LDecl.add_local x bd new_)
+
+      in List.fold_left add1 (Sid.empty, new_) ids in
+
+    for_form known concl;
+    FApi.xmutate1_hyps tc (VShuffle ids) [(new_, concl)]
+
+  with E.InvalidShuffle ->
+    tc_error !!tc "invalid shuffle"
+
+(* -------------------------------------------------------------------- *)
 let t_change_r ?target action (tc : tcenv1) =
   match target with
   | None -> begin
