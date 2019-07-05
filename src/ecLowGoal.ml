@@ -1689,7 +1689,7 @@ let t_subst_x ?kind ?tg ?(clear = SCall) ?(gen=false) ?var ?tside ?eqid (tc : tc
           let y, fy =
             if gen then
               let y = EcIdent.create "y" in
-              Some (y,f.f_ty), Some (f_local y f.f_ty)
+              Some y, Some (f_local y f.f_ty)
             else None, None in
           let subst, substy, check = LowSubst.build_subst env var f fy in
 
@@ -1735,7 +1735,7 @@ let t_subst_x ?kind ?tg ?(clear = SCall) ?(gen=false) ?var ?tside ?eqid (tc : tc
             | Some y ->
               let substy = oget substy in
               let all = hposty @ posty in
-              Some (y, List.map (substy1 substy) all, all, side, var, f) in
+              Some (y, substy1 substy, all, side, var, f) in
 
           let clear  =
             match var with
@@ -1998,7 +1998,7 @@ let t_progress ?options ?ti (tt : FApi.backward) (tc : tcenv1) =
     (hd, `All tl)
  *)
 type cstate = {
-  cs_underconj : bool;
+  cs_undosubst : Sid.t;
   cs_sbeq : Sid.t;
 }
 
@@ -2071,8 +2071,11 @@ let t_crush ?(delta = true) ?tsolve (tc : tcenv1) =
     | _ ->
        let reduce = if delta then `Full else `NoDelta in
        let thesplit tc = t_split ~closeonly:false ~reduce tc in
+       let st_split =
+         let hyps = List.map fst (LDecl.tohyps (FApi.tc1_hyps tc)).h_local in
+         { st with cs_undosubst = Sid.of_list hyps } in
        let tc =
-         match FApi.t_try_base (thesplit @! t_print "undersplit" (aux0 {st with cs_underconj = true})) tc with
+         match FApi.t_try_base (thesplit @! t_print "undersplit" (aux0 st_split)) tc with
          | `Success tc -> tc
          | `Failure _  -> FApi.t_try tsolve tc in
        let pr = proofenv_of_proof (proof_of_tcenv tc) in
@@ -2096,11 +2099,8 @@ let t_crush ?(delta = true) ?tsolve (tc : tcenv1) =
     let togen = ref None in
     let t_subst sk tc =
       let hyps0 = FApi.tc1_hyps tc in
-      let newtc, gen = t_subst_x ~clear:SCnone ~kind:sk ~gen:true ~eqid:eqid (*~tg:st.cs_sbeq *)tc in
-      let ingoal =
-        let newhyps = FApi.tc1_hyps (FApi.as_tcenv1 newtc) in
-        LowApply.sub_hyps newhyps hyps0 in
-      togen := Some(ingoal, oget gen, hyps0);
+      let newtc, gen = t_subst_x ~clear:SCnone ~kind:sk ~gen:true ~eqid:eqid ~tg:st.cs_sbeq tc in
+      togen := Some(oget gen, hyps0);
       newtc in
 
     let t_init =
@@ -2123,8 +2123,15 @@ let t_crush ?(delta = true) ?tsolve (tc : tcenv1) =
     let t_final tc =
       match !togen with
       | None -> t_generalize_hyp ~clear:`Yes ~missing:false eqid tc
-      | Some (ingoal, ((y,ty), posty, postx, side, var, f), hyps0) ->
-        if not st.cs_underconj then t_clear eqid tc
+      | Some ((y, substy, postx, side, var, f), hyps0) ->
+        let ty = f.f_ty in
+        let postx =
+          List.filter (fun (x,_fx) ->
+              Sid.mem x st.cs_undosubst) postx in
+        let posty = List.map substy postx in
+        let shuffle_perm = List.rev_map fst (LDecl.tohyps hyps0).h_local in
+        if posty = [] then
+          (t_shuffle shuffle_perm @! t_clear eqid) tc
         else
         let ids = List.rev (List.map fst postx) in
         let gG = FApi.tc1_goal tc in
@@ -2159,8 +2166,7 @@ let t_crush ?(delta = true) ?tsolve (tc : tcenv1) =
           (* pre, x=f, postx |- G *)
           t_print "shuffle" (t_shuffle (List.rev_map fst (LDecl.tohyps hyps0).h_local));
           (* hyps0 |- G *)
-          t_print "gen clear" (if ingoal then t_clear eqid
-          else t_generalize_hyp ~clear:`Yes ~missing:false eqid)] tc
+          t_print "gen clear" (t_generalize_hyp ~clear:`Yes ~missing:false eqid)] tc
     in
     let entry tc =
       match !togen with
@@ -2172,7 +2178,7 @@ let t_crush ?(delta = true) ?tsolve (tc : tcenv1) =
   in
 
   let state =
-    { cs_underconj = false;
+    { cs_undosubst = Sid.empty;
       cs_sbeq = Sid.of_list (List.map fst (LDecl.tohyps (FApi.tc1_hyps tc)).h_local);
     } in
   FApi.t_seq (entry state) (t_simplify_with_info EcReduction.nodelta) tc
