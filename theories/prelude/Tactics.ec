@@ -96,7 +96,7 @@ lemma nosmt if_congr ['a] (e e' : bool) (c1 c2 c1' c2': 'a) :
   => (if e then c1 else c2) = (if e' then c1' else c2')
 by [].
 
-lemma nosmt eq_ind ['a] x y (f:'a -> bool) : x = y => f x => f y by move=> ->.
+lemma nosmt eq_ind ['a] x y (f:'a -> bool) : x = y => f x => f y by [].
 
 (* -------------------------------------------------------------------- *)
 lemma nosmt and3_s1 b1 b2 b3 : b1 => b2 && b3 => b1 && b2 && b3 by [].
