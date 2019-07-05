@@ -254,14 +254,18 @@ let t_shuffle (ids : EcIdent.t list) (tc : tcenv1) =
     let hyps = Mid.of_list hyps in
 
     let for_form known f =
-      if not (Mid.submap (fun _ _ _ -> true) f.f_fv known) then
-        raise E.InvalidShuffle in
+      let test x _ =
+        (* Either the variable is in known or was not in the previous hyps,
+           in that case the variable is declared in the environment *)
+        Mid.mem x known || not (LDecl.has_id x hypstc) in
+
+      if not (Mid.for_all test f.f_fv) then raise E.InvalidShuffle in
 
     let new_ = LDecl.init (LDecl.baseenv hypstc) h_tvar in
+
     let known, new_ =
       let add1 (known, new_) x =
-        if Sid.mem x known then
-          raise E.InvalidShuffle;
+        if Sid.mem x known then raise E.InvalidShuffle;
 
         let bd = Mid.find_opt x hyps in
         let bd = oget ~exn:E.InvalidShuffle bd in
@@ -277,11 +281,9 @@ let t_shuffle (ids : EcIdent.t list) (tc : tcenv1) =
 
         | LD_mem _ | LD_abs_st _ | LD_modty _ ->
             () end;
-
         (Sid. add x known, LDecl.add_local x bd new_)
 
       in List.fold_left add1 (Sid.empty, new_) ids in
-
     for_form known concl;
     FApi.xmutate1_hyps tc (VShuffle ids) [(new_, concl)]
 
