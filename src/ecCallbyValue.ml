@@ -400,9 +400,13 @@ and cbv (st : state) (s : subst) (f : form) (args : args) : form =
             let br  = oget (List.nth_opt bs idx) in
             cbv st s br (Aapp (cargs, args))
 
-        | _ -> app_red st (f_match (norm_lambda st cf) bs ty) args
+        | _ ->
+          let bs = List.map (norm st s) bs in
+          app_red st (f_match (norm_lambda st cf) bs ty) args
 
-      else app_red st (f_match (norm st s cf) bs ty) args
+      else
+        let bs = List.map (norm st s) bs in
+        app_red st (f_match (norm st s cf) bs ty) args
 
   | Flet (p, f1, f2) ->
     let f1 = cbv_init st s f1 in
