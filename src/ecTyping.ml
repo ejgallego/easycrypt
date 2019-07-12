@@ -2764,8 +2764,10 @@ let rec trans_form_or_pattern env ?mv ?ps ue pf tt =
 
     | PFmatch (pcf, pb) ->
         let cf = transf env pcf in
+        let cfty = Tuni.offun (EcUnify.UniEnv.assubst ue) cf.f_ty in
+
         let inddecl =
-          match (EcEnv.ty_hnorm cf.f_ty env).ty_node with
+          match (EcEnv.ty_hnorm cfty env).ty_node with
           | Tconstr (indp, _) -> begin
               match EcEnv.Ty.by_path indp env with
               | { tyd_type = `Datatype dt } ->
