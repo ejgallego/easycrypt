@@ -393,7 +393,8 @@ and cbv (st : state) (s : subst) (f : form) (args : args) : form =
 
   | Fmatch (cf, bs, ty) ->
       if st.st_ri.iota then
-        match fst_map f_node (destr_app (cbv_init st s cf)) with
+        let cf = cbv_init st s cf in
+        match fst_map f_node (destr_app cf) with
         | Fop (p, _), cargs when EcEnv.Op.is_dtype_ctor st.st_env p ->
             let idx = EcEnv.Op.by_path p st.st_env in
             let idx = snd (EcDecl.operator_as_ctor idx) in
