@@ -35,6 +35,7 @@ RUN \
         sudo apt-get -q -y --no-install-recommends install wget && \
         wget https://github.com/CVC4/CVC4/releases/download/${CVC4V}/cvc4-${CVC4V}-x86_64-linux-opt && \
         sudo mv cvc4-${CVC4V}-x86_64-linux-opt /usr/bin/cvc4 && \
+        chmod u+x /usr/bin/cvc4 && \
         wget https://github.com/Z3Prover/z3/releases/download/Z3-${Z3V}/z3-${Z3V}-x64-debian-8.11.zip && \
         unzip -j z3-${Z3V}-x64-debian-8.11.zip z3-${Z3V}-x64-debian-8.11/bin/z3 && \
         rm z3-${Z3V}-x64-debian-8.11.zip && \
